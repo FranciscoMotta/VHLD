@@ -1,0 +1,115 @@
+LIBRARY IEEE;
+
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+ENTITY PWM IS 
+PORT 
+( 
+reset, clock, w: IN STD_LOGIC;
+CLK_IN: IN STD_LOGIC;
+SALIDA_GPIO : OUT STD_LOGIC;
+SALIDA_PWM : OUT STD_LOGIC
+);
+END PWM;
+
+
+ARCHITECTURE DIVISOR_DE_FREQ OF PWM IS
+CONSTANT TOP: STD_LOGIC_VECTOR (27 DOWNTO 0) := x"0000031";
+SIGNAL CONTADOR : STD_LOGIC_VECTOR (27 DOWNTO 0);
+SIGNAL CLK_OUT: STD_LOGIC;
+SIGNAL CONTADOR_PWM :STD_LOGIC_VECTOR(15 DOWNTO 0); 
+SIGNAL DUTY_CICLE : STD_LOGIC_VECTOR (15 DOWNTO 0):= x"0000"; --2500
+SIGNAL PWM : STD_LOGIC;
+
+
+---------------------------------------------------------------------
+
+TYPE state IS (A, B, C, D);
+SIGNAL pr_state, nx_state: state;
+
+--------------------------------------------------------------------
+BEGIN 
+PROCESS (CLK_IN)
+BEGIN
+IF(CLK_IN'EVENT AND CLK_IN ='1') THEN
+
+--DISEÑO DEL CONTADOR 
+  IF (CONTADOR = TOP) THEN 
+  CONTADOR <= x"0000000";
+  ELSE 
+   CONTADOR <= CONTADOR + x"0000001";
+  END IF;
+--DISEÑO DEL COMPARADOR
+
+   IF (CONTADOR = TOP) THEN 
+		CLK_OUT <= '1';
+	ELSE 
+		CLK_OUT <= '0';
+   END IF;	
+END IF;
+END PROCESS;
+
+PROCESS (CLK_OUT)
+BEGIN
+IF (CLK_OUT'EVENT AND CLK_OUT = '1') THEN 
+    IF (CONTADOR_PWM = x"4E1F") THEN 
+	    CONTADOR_PWM <= x"0000";
+    ELSE 
+	 CONTADOR_PWM <= CONTADOR_PWM + x"01";
+	 
+	 --DISEÑO DEL COMPARADOR 
+        
+	 END IF;
+END IF;
+END PROCESS; 
+
+----------------- Seccion inferior: ------------------------
+
+	PROCESS (reset, clock)
+	BEGIN
+		IF (reset='1') THEN
+			pr_state <= A;
+		ELSIF (clock'EVENT AND clock='1') THEN
+			pr_state <= nx_state;
+		END IF;
+	END PROCESS;
+	
+----------------- Seccion superior: -----------------------
+	
+	PROCESS (w, pr_state)
+	BEGIN
+		CASE pr_state IS
+			WHEN A => DUTY_CICLE <= x"01F3";
+				IF (w = '1') THEN
+					nx_state <= B;
+				ELSE
+					nx_state <= A;
+				END IF;
+			WHEN B => DUTY_CICLE <= x"0340";
+				IF (w = '1') THEN
+					nx_state <= C;
+				ELSE
+					nx_state <= A;
+				END IF;
+			WHEN C => DUTY_CICLE <= x"048D";
+   			IF (w = '1') THEN
+					nx_state <= D;
+				ELSE
+					nx_state <= B;
+				END IF;
+		   WHEN D => DUTY_CICLE <= x"09C3";
+				IF (w = '1') THEN
+					nx_state <= D;
+				ELSE
+					nx_state <= C;
+				END IF;
+		END CASE;
+	END PROCESS;
+ 
+PWM <= '1' WHEN (CONTADOR_PWM <= DUTY_CICLE) ELSE 
+		'0';
+SALIDA_GPIO <= PWM;
+SALIDA_PWM <= PWM;
+
+END DIVISOR_DE_FREQ;
